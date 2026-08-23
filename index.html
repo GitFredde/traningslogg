@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Träningslogg</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root {
     --bg: #1a1a1a;
@@ -311,10 +312,140 @@
     line-height: 1.5;
     padding: 0 20px;
   }
+
+  /* ---------- Top-level nav ---------- */
+  .top-nav {
+    display: flex;
+    gap: 8px;
+    padding: 14px 16px 0;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+  .top-nav-btn {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .top-nav-btn.active {
+    background: var(--accent);
+    color: #1a1a1a;
+    border-color: var(--accent);
+  }
+
+  /* ---------- Stats view ---------- */
+  .range-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .range-tab {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .range-tab.active {
+    background: var(--accent);
+    color: #1a1a1a;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  .section-title {
+    font-size: 0.95rem;
+    color: var(--text-dim);
+    font-weight: 600;
+    margin: 22px 4px 10px;
+  }
+  .chart-wrap {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 10px;
+    position: relative;
+    height: 240px;
+  }
+  .stat-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 4px;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .stat-card .sc-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .stat-card .sc-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .stat-card .sc-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+  }
+  .stat-card .sc-delta {
+    font-size: 0.72rem;
+    margin-top: 2px;
+  }
+  .sc-delta.up { color: #5ec26a; }
+  .sc-delta.down { color: var(--danger); }
+  .sc-delta.flat { color: var(--text-dim); }
+
+  /* ---------- Per-exercise progression cards ---------- */
+  .ex-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .ex-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .ex-card-top .ex-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .ex-card-top .ex-pr {
+    font-size: 0.72rem;
+    color: var(--accent);
+    text-align: right;
+  }
+  .ex-card .ex-chart-wrap {
+    height: 90px;
+    position: relative;
+  }
 </style>
 </head>
 <body>
 
+<div class="top-nav">
+  <button class="top-nav-btn active" id="navLog">Logg</button>
+  <button class="top-nav-btn" id="navStats">Statistik</button>
+</div>
+
+<div id="logView">
 <header>
   <h1>Träningslogg</h1>
   <div class="week-nav">
@@ -343,6 +474,46 @@
     </table>
   </div>
 </main>
+</div>
+
+<div id="statsView" style="display:none;">
+  <header>
+    <h1>Statistik</h1>
+    <div class="range-tabs" id="rangeTabs">
+      <button class="range-tab" data-range="4">4 veckor</button>
+      <button class="range-tab active" data-range="10">10 veckor</button>
+      <button class="range-tab" data-range="year">Hela året</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="stat-cards" id="statCards"></div>
+
+    <h2 class="section-title">Antal set per kategori</h2>
+    <div class="chart-wrap"><canvas id="setsChart"></canvas></div>
+
+    <h2 class="section-title">Antal reps per kategori</h2>
+    <div class="chart-wrap"><canvas id="repsChart"></canvas></div>
+
+    <div class="summary-toggle">
+      <button id="toggleStatsTable">Visa veckotabell ▾</button>
+    </div>
+    <div class="summary" id="statsTableBlock">
+      <table class="summary-table" id="statsTable"></table>
+    </div>
+
+    <div class="summary-toggle">
+      <button id="toggleExerciseStats">Progression per övning ▾</button>
+    </div>
+    <div class="summary" id="exerciseStatsBlock">
+      <div id="exerciseCards"></div>
+    </div>
+
+    <div class="footer-note">
+      Statistiken utgår från dagens datum, oavsett vilken vecka du bläddrat till i Logg-vyn.
+    </div>
+  </main>
+</div>
 
 <script>
 (function() {
@@ -575,8 +746,8 @@
     });
   }
 
-  function weekTotalsForExercise(exName) {
-    const wk = data.weeks[currentWeekKey()] || {};
+  function weekTotalsForExercise(exName, wKey) {
+    const wk = data.weeks[wKey || currentWeekKey()] || {};
     let sum = 0, sets = 0;
     DAYS.forEach(day => {
       const arr = (wk[day] && wk[day][exName]) || [];
@@ -824,6 +995,337 @@
       : "Visa veckans summering ▾";
   });
 
+  // ---------- Statistics ----------
+  const CATS = ["Tryck", "Drag", "Ben", "Core"];
+  // Okabe-Ito palette — designed to stay distinguishable across all common
+  // forms of color blindness. Line dash + point shape give a second,
+  // color-independent way to tell categories apart.
+  const CAT_COLORS = {
+    Tryck: "#E69F00", // orange
+    Drag: "#0072B2",  // deep blue
+    Ben: "#009E73",   // bluish green
+    Core: "#CC79A7"   // reddish purple/pink — kept away from orange on purpose
+  };
+  const CAT_DASH = {
+    Tryck: [],
+    Drag: [8, 4],
+    Ben: [2, 3],
+    Core: [8, 3, 2, 3]
+  };
+  const CAT_POINT_STYLE = {
+    Tryck: "circle",
+    Drag: "triangle",
+    Ben: "rect",
+    Core: "rectRot"
+  };
+
+  let statsRange = "10"; // "4" | "10" | "year"
+  let setsChartInstance = null;
+  let repsChartInstance = null;
+  let exerciseChartInstances = [];
+
+  function isoWeekDateFromYearWeek(year, week) {
+    // Jan 4 is always in ISO week 1. Monday of week N = Monday(Jan4) + (N-1)*7 days.
+    const jan4 = new Date(year, 0, 4);
+    const jan4Monday = mondayOf(jan4);
+    const d = new Date(jan4Monday);
+    d.setDate(d.getDate() + (week - 1) * 7);
+    return d;
+  }
+
+  function weekLabelFromKey(key) {
+    const parts = key.split("-W");
+    return "v" + parseInt(parts[1], 10);
+  }
+
+  // Ordered oldest -> newest list of {key, label} for the selected range,
+  // anchored on today's real date (not whatever week is open in Logg-vyn).
+  function getStatsWeekKeys(range) {
+    const today = new Date();
+    const todayInfo = isoWeekInfo(today);
+    const n = range === "year" ? todayInfo.week : parseInt(range, 10);
+    const collected = [];
+    let cursor = new Date(today);
+    for (let i = 0; i < n; i++) {
+      const info = isoWeekInfo(cursor);
+      collected.push({
+        key: info.year + "-W" + String(info.week).padStart(2, "0"),
+        label: "v" + info.week
+      });
+      cursor.setDate(cursor.getDate() - 7);
+    }
+    collected.reverse();
+    return collected;
+  }
+
+  // n weeks immediately before the given week key — used for period-over-period deltas.
+  function getStatsWeekKeysBefore(beforeKey, n) {
+    const [yStr, wStr] = beforeKey.split("-W");
+    const y = parseInt(yStr, 10), w = parseInt(wStr, 10);
+    const anchor = isoWeekDateFromYearWeek(y, w);
+    const collected = [];
+    let cursor = new Date(anchor);
+    cursor.setDate(cursor.getDate() - 7);
+    for (let i = 0; i < n; i++) {
+      const info = isoWeekInfo(cursor);
+      collected.push({ key: info.year + "-W" + String(info.week).padStart(2, "0") });
+      cursor.setDate(cursor.getDate() - 7);
+    }
+    return collected;
+  }
+
+  function categoryTotalsForWeek(weekKeyStr) {
+    const totals = {};
+    CATS.forEach(cat => { totals[cat] = { sum: 0, sets: 0 }; });
+    CATS.forEach(cat => {
+      (data.exercises[cat] || []).forEach(ex => {
+        const t = weekTotalsForExercise(ex.name, weekKeyStr);
+        totals[cat].sum += t.sum;
+        totals[cat].sets += t.sets;
+      });
+    });
+    return totals;
+  }
+
+  function allActiveExercises() {
+    const list = [];
+    CATS.forEach(cat => {
+      (data.exercises[cat] || []).forEach(ex => {
+        if (!ex.archived) list.push({ cat, name: ex.name });
+      });
+    });
+    return list;
+  }
+
+  function findPR(exName) {
+    let best = null;
+    Object.keys(data.weeks).forEach(wk => {
+      const week = data.weeks[wk];
+      Object.keys(week).forEach(day => {
+        const arr = (week[day] && week[day][exName]) || [];
+        arr.forEach(v => {
+          if (!best || v > best.value) best = { value: v, week: wk };
+        });
+      });
+    });
+    return best;
+  }
+
+  function renderStats() {
+    const weeks = getStatsWeekKeys(statsRange);
+    renderStatCards(weeks);
+    renderCategoryCharts(weeks);
+    renderStatsTable(weeks);
+    renderExerciseProgression(weeks);
+  }
+
+  function renderStatCards(weeks) {
+    const el = document.getElementById("statCards");
+    el.innerHTML = "";
+
+    const currentTotals = { Tryck: 0, Drag: 0, Ben: 0, Core: 0 };
+    weeks.forEach(w => {
+      const t = categoryTotalsForWeek(w.key);
+      CATS.forEach(cat => currentTotals[cat] += t[cat].sets);
+    });
+
+    const prevWeeks = getStatsWeekKeysBefore(weeks[0].key, weeks.length);
+    const prevTotals = { Tryck: 0, Drag: 0, Ben: 0, Core: 0 };
+    prevWeeks.forEach(w => {
+      const t = categoryTotalsForWeek(w.key);
+      CATS.forEach(cat => prevTotals[cat] += t[cat].sets);
+    });
+
+    CATS.forEach(cat => {
+      const cur = currentTotals[cat];
+      const prev = prevTotals[cat];
+      let deltaHtml = "";
+      if (prev > 0) {
+        const diff = cur - prev;
+        const pct = Math.round((diff / prev) * 100);
+        const cls = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
+        const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "–";
+        deltaHtml = '<div class="sc-delta ' + cls + '">' + arrow + " " + Math.abs(pct) + "% vs. föreg. period</div>";
+      } else if (cur > 0) {
+        deltaHtml = '<div class="sc-delta up">Ny aktivitet</div>';
+      }
+      const card = document.createElement("div");
+      card.className = "stat-card";
+      card.innerHTML =
+        '<div class="sc-label"><span class="sc-dot" style="background:' + CAT_COLORS[cat] + '"></span>' + cat + '</div>' +
+        '<div class="sc-value">' + cur + ' set</div>' +
+        deltaHtml;
+      el.appendChild(card);
+    });
+  }
+
+  function renderCategoryCharts(weeks) {
+    const labels = weeks.map(w => w.label);
+    const setsDatasets = CATS.map(cat => ({
+      label: cat,
+      data: weeks.map(w => categoryTotalsForWeek(w.key)[cat].sets),
+      borderColor: CAT_COLORS[cat],
+      backgroundColor: CAT_COLORS[cat],
+      borderDash: CAT_DASH[cat],
+      pointStyle: CAT_POINT_STYLE[cat],
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      borderWidth: 2.5,
+      tension: 0.25,
+      fill: false
+    }));
+    const repsDatasets = CATS.map(cat => ({
+      label: cat,
+      data: weeks.map(w => categoryTotalsForWeek(w.key)[cat].sum),
+      borderColor: CAT_COLORS[cat],
+      backgroundColor: CAT_COLORS[cat],
+      borderDash: CAT_DASH[cat],
+      pointStyle: CAT_POINT_STYLE[cat],
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      borderWidth: 2.5,
+      tension: 0.25,
+      fill: false
+    }));
+
+    const commonOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: "#9a9a9a", font: { size: 10 }, maxRotation: 0 }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: "#9a9a9a", font: { size: 10 } }, grid: { color: "#3a3a3a" } }
+      },
+      plugins: {
+        legend: { labels: { color: "#eaeaea", boxWidth: 12, font: { size: 11 }, usePointStyle: true } },
+        tooltip: { mode: "index", intersect: false }
+      }
+    };
+
+    if (setsChartInstance) setsChartInstance.destroy();
+    setsChartInstance = new Chart(document.getElementById("setsChart").getContext("2d"), {
+      type: "line",
+      data: { labels, datasets: setsDatasets },
+      options: commonOptions
+    });
+
+    if (repsChartInstance) repsChartInstance.destroy();
+    repsChartInstance = new Chart(document.getElementById("repsChart").getContext("2d"), {
+      type: "line",
+      data: { labels, datasets: repsDatasets },
+      options: commonOptions
+    });
+  }
+
+  function renderStatsTable(weeks) {
+    const table = document.getElementById("statsTable");
+    let html = "<thead><tr><th>Vecka</th>";
+    CATS.forEach(cat => { html += "<th>" + cat + "</th>"; });
+    html += "</tr></thead><tbody>";
+    weeks.slice().reverse().forEach(w => {
+      const t = categoryTotalsForWeek(w.key);
+      html += "<tr><td>" + w.label + "</td>";
+      CATS.forEach(cat => { html += "<td>" + t[cat].sets + "</td>"; });
+      html += "</tr>";
+    });
+    html += "</tbody>";
+    table.innerHTML = html;
+  }
+
+  function renderExerciseProgression(weeks) {
+    const container = document.getElementById("exerciseCards");
+    container.innerHTML = "";
+    exerciseChartInstances.forEach(c => c.destroy());
+    exerciseChartInstances = [];
+
+    allActiveExercises().forEach(ex => {
+      const pr = findPR(ex.name);
+      const prText = pr ? pr.value + " reps (bästa set, " + weekLabelFromKey(pr.week) + ")" : "Ingen data ännu";
+
+      const card = document.createElement("div");
+      card.className = "ex-card";
+
+      const top = document.createElement("div");
+      top.className = "ex-card-top";
+      top.innerHTML =
+        '<span class="ex-title">' + ex.name + '</span>' +
+        '<span class="ex-pr">' + prText + '</span>';
+      card.appendChild(top);
+
+      const chartWrap = document.createElement("div");
+      chartWrap.className = "ex-chart-wrap";
+      const canvas = document.createElement("canvas");
+      chartWrap.appendChild(canvas);
+      card.appendChild(chartWrap);
+      container.appendChild(card);
+
+      const repsData = weeks.map(w => weekTotalsForExercise(ex.name, w.key).sum);
+      const chart = new Chart(canvas.getContext("2d"), {
+        type: "line",
+        data: {
+          labels: weeks.map(w => w.label),
+          datasets: [{
+            data: repsData,
+            borderColor: CAT_COLORS[ex.cat] || "#ff8c00",
+            backgroundColor: "rgba(255,140,0,0.12)",
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: true } },
+          scales: {
+            x: { ticks: { color: "#9a9a9a", font: { size: 9 }, maxTicksLimit: 6 }, grid: { display: false } },
+            y: { ticks: { color: "#9a9a9a", font: { size: 9 } }, grid: { color: "#3a3a3a" }, beginAtZero: true }
+          }
+        }
+      });
+      exerciseChartInstances.push(chart);
+    });
+  }
+
+  function statsViewVisible() {
+    return document.getElementById("statsView").style.display !== "none";
+  }
+
+  // ---------- Nav switching ----------
+  document.getElementById("navLog").addEventListener("click", () => {
+    document.getElementById("navLog").classList.add("active");
+    document.getElementById("navStats").classList.remove("active");
+    document.getElementById("logView").style.display = "";
+    document.getElementById("statsView").style.display = "none";
+  });
+  document.getElementById("navStats").addEventListener("click", () => {
+    document.getElementById("navStats").classList.add("active");
+    document.getElementById("navLog").classList.remove("active");
+    document.getElementById("logView").style.display = "none";
+    document.getElementById("statsView").style.display = "";
+    renderStats();
+  });
+
+  document.querySelectorAll(".range-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".range-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      statsRange = btn.dataset.range;
+      renderStats();
+    });
+  });
+
+  document.getElementById("toggleStatsTable").addEventListener("click", (e) => {
+    const block = document.getElementById("statsTableBlock");
+    block.classList.toggle("open");
+    e.target.textContent = block.classList.contains("open") ? "Dölj veckotabell ▴" : "Visa veckotabell ▾";
+  });
+
+  document.getElementById("toggleExerciseStats").addEventListener("click", (e) => {
+    const block = document.getElementById("exerciseStatsBlock");
+    block.classList.toggle("open");
+    e.target.textContent = block.classList.contains("open") ? "Progression per övning ▴" : "Progression per övning ▾";
+  });
+
   // ---------- Startup ----------
   render(); // instant paint with whatever's local, so the app feels snappy
 
@@ -837,6 +1339,7 @@
         data.exercises = migrateExercises(data.exercises);
         saveLocal(data);
         render();
+        if (statsViewVisible()) renderStats();
       } else {
         // Nothing in the cloud yet (first run) — push what we have locally
         pushToSupabase(data);
