@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Träningslogg</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --bg: #1a1a1a;
@@ -135,11 +136,66 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
+    gap: 8px;
   }
-  .exercise-name { font-size: 0.95rem; }
+  .exercise-name { font-size: 0.95rem; flex: 1; }
   .exercise-week-total {
     font-size: 0.72rem;
     color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .remove-ex-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .remove-ex-btn:hover { color: var(--danger); }
+  .archived-wrap {
+    border-top: 1px solid var(--border);
+    padding: 8px 14px;
+  }
+  .archived-toggle {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 4px 0;
+    width: 100%;
+    text-align: left;
+  }
+  .archived-body { padding-top: 6px; }
+  .archived-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+  }
+  .archived-row:last-child { border-bottom: none; }
+  .archived-btn-group {
+    display: flex;
+    gap: 6px;
+  }
+  .archived-row button {
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+  .archived-row button.purge-btn {
+    color: var(--danger);
+    border-color: var(--danger);
   }
   .set-chips {
     display: flex;
@@ -268,6 +324,7 @@
   </div>
   <button class="today-btn" id="jumpToday">Hoppa till idag</button>
   <div class="day-tabs" id="dayTabs"></div>
+  <div id="syncIndicator" style="text-align:center;font-size:0.68rem;color:var(--text-dim);margin-top:8px;"></div>
 </header>
 
 <main>
@@ -295,7 +352,38 @@
 (function() {
   "use strict";
 
-  // ---------- Storage layer (localStorage with in-memory fallback) ----------
+  // ---------- Supabase config ----------
+  // Fyll i dina egna värden här (Settings → API i Supabase-projektet).
+  const SUPABASE_URL = "https://xzgyrsghhjikrthfqooc.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_-jVPmLBS4TIroesTXjxRLw_I9hGrDeL";
+  const RECORD_ID = "fredrik"; // en rad i tabellen räcker för en användare
+
+  let supabaseClient = null;
+  let supabaseReady = false;
+  if (SUPABASE_URL.indexOf("https://") === 0 && SUPABASE_ANON_KEY.length > 20) {
+    try {
+      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      supabaseReady = true;
+    } catch (e) {
+      console.warn("Kunde inte skapa Supabase-klient:", e);
+    }
+  }
+
+  const syncIndicator = document.getElementById("syncIndicator");
+  function setSyncStatus(status) {
+    // status: "offline" | "synced" | "syncing" | "error"
+    if (!syncIndicator) return;
+    const map = {
+      offline: "● Endast lokalt",
+      synced: "● Synkad",
+      syncing: "● Synkar…",
+      error: "● Synk misslyckades"
+    };
+    syncIndicator.textContent = map[status] || "";
+    syncIndicator.dataset.status = status;
+  }
+
+  // ---------- Storage layer (localStorage cache + Supabase sync) ----------
   const STORAGE_KEY = "traningslogg_v1";
   let memoryFallback = null;
   let storageWorks = true;
@@ -318,7 +406,7 @@
     return defaultData();
   }
 
-  function saveData(data) {
+  function saveLocal(data) {
     if (storageWorks) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -328,22 +416,79 @@
     memoryFallback = data;
   }
 
+  let syncTimer = null;
+  function saveData(data) {
+    saveLocal(data);
+    if (!supabaseReady) {
+      setSyncStatus("offline");
+      return;
+    }
+    // Debounce writes slightly so rapid taps don't fire a request each
+    setSyncStatus("syncing");
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => pushToSupabase(data), 500);
+  }
+
+  async function pushToSupabase(data) {
+    try {
+      const { error } = await supabaseClient
+        .from("training_log")
+        .upsert({ id: RECORD_ID, data: data, updated_at: new Date().toISOString() });
+      if (error) throw error;
+      setSyncStatus("synced");
+    } catch (e) {
+      console.warn("Kunde inte synka mot Supabase:", e);
+      setSyncStatus("error");
+    }
+  }
+
+  async function pullFromSupabase() {
+    if (!supabaseReady) return null;
+    try {
+      const { data: rows, error } = await supabaseClient
+        .from("training_log")
+        .select("data")
+        .eq("id", RECORD_ID)
+        .maybeSingle();
+      if (error) throw error;
+      return rows ? rows.data : null;
+    } catch (e) {
+      console.warn("Kunde inte hämta från Supabase:", e);
+      setSyncStatus("error");
+      return null;
+    }
+  }
+
   function defaultData() {
     return {
       exercises: {
-        "Tryck": ["Armhävningar", "Dips"],
-        "Drag": ["Chins", "Rodd"],
-        "Ben": ["Knäböj", "Enbensböj", "Utfall"],
-        "Core": ["Axeltaps", "Planka"]
+        "Tryck": [{name: "Armhävningar", archived: false}, {name: "Dips", archived: false}],
+        "Drag": [{name: "Chins", archived: false}, {name: "Rodd", archived: false}],
+        "Ben": [{name: "Knäböj", archived: false}, {name: "Enbensböj", archived: false}, {name: "Utfall", archived: false}],
+        "Core": [{name: "Axeltaps", archived: false}, {name: "Planka", archived: false}]
       },
       weeks: {}
     };
+  }
+
+  // Migrates older saved data (plain string exercise names) to the
+  // {name, archived} object format, so nobody's existing log breaks.
+  function migrateExercises(exercises) {
+    Object.keys(exercises).forEach(cat => {
+      exercises[cat] = exercises[cat].map(ex => {
+        if (typeof ex === "string") return { name: ex, archived: false };
+        if (typeof ex.archived !== "boolean") ex.archived = false;
+        return ex;
+      });
+    });
+    return exercises;
   }
 
   let data = loadData();
   // Make sure structure is sane even if old data is malformed
   if (!data.exercises) data.exercises = defaultData().exercises;
   if (!data.weeks) data.weeks = {};
+  data.exercises = migrateExercises(data.exercises);
 
   // ---------- Date / ISO week helpers ----------
   const DAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
@@ -451,11 +596,14 @@
 
     Object.keys(data.exercises).forEach(catName => {
       const exList = data.exercises[catName];
+      const activeList = exList.filter(ex => !ex.archived);
+      const archivedList = exList.filter(ex => ex.archived);
 
-      // category totals for the week
+      // category totals for the week — includes archived exercises too,
+      // so history stays correct even after an exercise is archived.
       let catSum = 0, catSets = 0;
       exList.forEach(ex => {
-        const t = weekTotalsForExercise(ex);
+        const t = weekTotalsForExercise(ex.name);
         catSum += t.sum; catSets += t.sets;
       });
 
@@ -468,15 +616,40 @@
         '<span class="cat-totals">' + catSum + ' reps · ' + catSets + ' set</span>';
       catEl.appendChild(header);
 
-      exList.forEach(exName => {
+      activeList.forEach(ex => {
+        const exName = ex.name;
         const exEl = document.createElement("div");
         exEl.className = "exercise";
 
         const t = weekTotalsForExercise(exName);
         const top = document.createElement("div");
         top.className = "exercise-top";
-        top.innerHTML = '<span class="exercise-name">' + exName + '</span>' +
-          '<span class="exercise-week-total">' + t.sum + ' reps · ' + t.sets + ' set (v.)</span>';
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "exercise-name";
+        nameSpan.textContent = exName;
+        const totalSpan = document.createElement("span");
+        totalSpan.className = "exercise-week-total";
+        totalSpan.textContent = t.sum + " reps · " + t.sets + " set (v.)";
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "remove-ex-btn";
+        removeBtn.textContent = "✕";
+        removeBtn.title = "Ta bort " + exName;
+        removeBtn.addEventListener("click", () => {
+          const ok = confirm(
+            'Ta bort "' + exName + '"?\n\n' +
+            "Den försvinner från listan, men all historik du redan loggat sparas " +
+            "och räknas fortfarande med i gamla veckors summering. Du kan ta fram " +
+            'den igen senare under "Arkiverade övningar".'
+          );
+          if (ok) {
+            ex.archived = true;
+            saveData(data);
+            render();
+          }
+        });
+        top.appendChild(nameSpan);
+        top.appendChild(totalSpan);
+        top.appendChild(removeBtn);
         exEl.appendChild(top);
 
         const chipsWrap = document.createElement("div");
@@ -534,13 +707,76 @@
       addExBtn.addEventListener("click", () => {
         const name = prompt("Namn på ny övning i " + catName + ":");
         if (name && name.trim()) {
-          data.exercises[catName].push(name.trim());
+          data.exercises[catName].push({ name: name.trim(), archived: false });
           saveData(data);
           render();
         }
       });
       addExRow.appendChild(addExBtn);
       catEl.appendChild(addExRow);
+
+      if (archivedList.length > 0) {
+        const archWrap = document.createElement("div");
+        archWrap.className = "archived-wrap";
+        const archToggle = document.createElement("button");
+        archToggle.className = "archived-toggle";
+        archToggle.textContent = "Arkiverade övningar (" + archivedList.length + ") ▾";
+        const archBody = document.createElement("div");
+        archBody.className = "archived-body";
+        archBody.style.display = "none";
+        archToggle.addEventListener("click", () => {
+          const open = archBody.style.display !== "none";
+          archBody.style.display = open ? "none" : "block";
+          archToggle.textContent = "Arkiverade övningar (" + archivedList.length + ") " + (open ? "▾" : "▴");
+        });
+        archivedList.forEach(ex => {
+          const row = document.createElement("div");
+          row.className = "archived-row";
+          const label = document.createElement("span");
+          label.textContent = ex.name;
+          const btnGroup = document.createElement("div");
+          btnGroup.className = "archived-btn-group";
+          const restoreBtn = document.createElement("button");
+          restoreBtn.textContent = "Visa igen";
+          restoreBtn.addEventListener("click", () => {
+            ex.archived = false;
+            saveData(data);
+            render();
+          });
+          const purgeBtn = document.createElement("button");
+          purgeBtn.className = "purge-btn";
+          purgeBtn.textContent = "Ta bort permanent";
+          purgeBtn.addEventListener("click", () => {
+            const ok = confirm(
+              'Ta bort "' + ex.name + '" PERMANENT?\n\n' +
+              "Detta går inte att ångra. All historik för den här övningen " +
+              "raderas ur alla veckor, och den försvinner helt från appen och databasen."
+            );
+            if (!ok) return;
+            // Remove the exercise definition itself
+            data.exercises[catName] = data.exercises[catName].filter(e => e !== ex);
+            // Purge every logged set for this exercise name, from every week/day
+            Object.keys(data.weeks).forEach(wk => {
+              const week = data.weeks[wk];
+              Object.keys(week).forEach(day => {
+                if (week[day] && Object.prototype.hasOwnProperty.call(week[day], ex.name)) {
+                  delete week[day][ex.name];
+                }
+              });
+            });
+            saveData(data);
+            render();
+          });
+          btnGroup.appendChild(restoreBtn);
+          btnGroup.appendChild(purgeBtn);
+          row.appendChild(label);
+          row.appendChild(btnGroup);
+          archBody.appendChild(row);
+        });
+        archWrap.appendChild(archToggle);
+        archWrap.appendChild(archBody);
+        catEl.appendChild(archWrap);
+      }
 
       categoriesEl.appendChild(catEl);
     });
@@ -553,11 +789,12 @@
     Object.keys(data.exercises).forEach(catName => {
       const exList = data.exercises[catName];
       let catSum = 0, catSets = 0;
-      exList.forEach(exName => {
-        const t = weekTotalsForExercise(exName);
+      exList.forEach(ex => {
+        const t = weekTotalsForExercise(ex.name);
         catSum += t.sum; catSets += t.sets;
         const row = document.createElement("tr");
-        row.innerHTML = "<td>" + exName + "</td><td>" + t.sum + "</td><td>" + t.sets + "</td>";
+        const nameLabel = ex.name + (ex.archived ? " (arkiverad)" : "");
+        row.innerHTML = "<td>" + nameLabel + "</td><td>" + t.sum + "</td><td>" + t.sets + "</td>";
         summaryBody.appendChild(row);
       });
       const catRow = document.createElement("tr");
@@ -591,7 +828,28 @@
       : "Visa veckans summering ▾";
   });
 
-  render();
+  // ---------- Startup ----------
+  render(); // instant paint with whatever's local, so the app feels snappy
+
+  if (supabaseReady) {
+    setSyncStatus("syncing");
+    pullFromSupabase().then(remote => {
+      if (remote) {
+        data = remote;
+        if (!data.exercises) data.exercises = defaultData().exercises;
+        if (!data.weeks) data.weeks = {};
+        data.exercises = migrateExercises(data.exercises);
+        saveLocal(data);
+        render();
+      } else {
+        // Nothing in the cloud yet (first run) — push what we have locally
+        pushToSupabase(data);
+      }
+      setSyncStatus("synced");
+    });
+  } else {
+    setSyncStatus("offline");
+  }
 })();
 </script>
 

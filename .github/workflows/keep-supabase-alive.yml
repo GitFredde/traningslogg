@@ -1,0 +1,24 @@
+name: Keep Supabase alive
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC. Supabase pauses free projects after
+    # 7 days of inactivity, so a weekly ping keeps it awake.
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST endpoint
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://xzgyrsghhjikrthfqooc.supabase.co/rest/v1/training_log?select=id&limit=1" \
+            -H "apikey: sb_publishable_-jVPmLBS4TIroesTXjxRLw_I9hGrDeL" \
+            -H "Authorization: Bearer sb_publishable_-jVPmLBS4TIroesTXjxRLw_I9hGrDeL")
+          echo "Supabase responded with HTTP $STATUS"
+          if [ "$STATUS" -ge 400 ]; then
+            echo "Unexpected status code from Supabase"
+            exit 1
+          fi
