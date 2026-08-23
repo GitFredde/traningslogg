@@ -487,8 +487,6 @@
   </header>
 
   <main>
-    <div class="stat-cards" id="statCards"></div>
-
     <h2 class="section-title">Antal set per kategori</h2>
     <div class="chart-wrap"><canvas id="setsChart"></canvas></div>
 
@@ -1024,15 +1022,6 @@
   let repsChartInstance = null;
   let exerciseChartInstances = [];
 
-  function isoWeekDateFromYearWeek(year, week) {
-    // Jan 4 is always in ISO week 1. Monday of week N = Monday(Jan4) + (N-1)*7 days.
-    const jan4 = new Date(year, 0, 4);
-    const jan4Monday = mondayOf(jan4);
-    const d = new Date(jan4Monday);
-    d.setDate(d.getDate() + (week - 1) * 7);
-    return d;
-  }
-
   function weekLabelFromKey(key) {
     const parts = key.split("-W");
     return "v" + parseInt(parts[1], 10);
@@ -1055,22 +1044,6 @@
       cursor.setDate(cursor.getDate() - 7);
     }
     collected.reverse();
-    return collected;
-  }
-
-  // n weeks immediately before the given week key — used for period-over-period deltas.
-  function getStatsWeekKeysBefore(beforeKey, n) {
-    const [yStr, wStr] = beforeKey.split("-W");
-    const y = parseInt(yStr, 10), w = parseInt(wStr, 10);
-    const anchor = isoWeekDateFromYearWeek(y, w);
-    const collected = [];
-    let cursor = new Date(anchor);
-    cursor.setDate(cursor.getDate() - 7);
-    for (let i = 0; i < n; i++) {
-      const info = isoWeekInfo(cursor);
-      collected.push({ key: info.year + "-W" + String(info.week).padStart(2, "0") });
-      cursor.setDate(cursor.getDate() - 7);
-    }
     return collected;
   }
 
@@ -1113,50 +1086,9 @@
 
   function renderStats() {
     const weeks = getStatsWeekKeys(statsRange);
-    renderStatCards(weeks);
     renderCategoryCharts(weeks);
     renderStatsTable(weeks);
     renderExerciseProgression(weeks);
-  }
-
-  function renderStatCards(weeks) {
-    const el = document.getElementById("statCards");
-    el.innerHTML = "";
-
-    const currentTotals = { Tryck: 0, Drag: 0, Ben: 0, Core: 0 };
-    weeks.forEach(w => {
-      const t = categoryTotalsForWeek(w.key);
-      CATS.forEach(cat => currentTotals[cat] += t[cat].sets);
-    });
-
-    const prevWeeks = getStatsWeekKeysBefore(weeks[0].key, weeks.length);
-    const prevTotals = { Tryck: 0, Drag: 0, Ben: 0, Core: 0 };
-    prevWeeks.forEach(w => {
-      const t = categoryTotalsForWeek(w.key);
-      CATS.forEach(cat => prevTotals[cat] += t[cat].sets);
-    });
-
-    CATS.forEach(cat => {
-      const cur = currentTotals[cat];
-      const prev = prevTotals[cat];
-      let deltaHtml = "";
-      if (prev > 0) {
-        const diff = cur - prev;
-        const pct = Math.round((diff / prev) * 100);
-        const cls = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
-        const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "–";
-        deltaHtml = '<div class="sc-delta ' + cls + '">' + arrow + " " + Math.abs(pct) + "% vs. föreg. period</div>";
-      } else if (cur > 0) {
-        deltaHtml = '<div class="sc-delta up">Ny aktivitet</div>';
-      }
-      const card = document.createElement("div");
-      card.className = "stat-card";
-      card.innerHTML =
-        '<div class="sc-label"><span class="sc-dot" style="background:' + CAT_COLORS[cat] + '"></span>' + cat + '</div>' +
-        '<div class="sc-value">' + cur + ' set</div>' +
-        deltaHtml;
-      el.appendChild(card);
-    });
   }
 
   function renderCategoryCharts(weeks) {
