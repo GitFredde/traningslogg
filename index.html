@@ -101,6 +101,7 @@
     color: var(--text-dim);
     cursor: pointer;
     white-space: nowrap;
+    position: relative;
   }
   .day-tab.active {
     background: var(--accent);
@@ -108,7 +109,22 @@
     border-color: var(--accent);
     font-weight: 600;
   }
+  .day-tab.is-today {
+    box-shadow: 0 0 0 2px rgba(234,234,234,0.85) inset;
+  }
   .day-tab .dsub { display: block; font-size: 0.65rem; opacity: 0.8; }
+  .day-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #5ec26a;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .day-tab.active .day-dot {
+    background: #1a1a1a;
+  }
   main {
     padding: 16px;
     max-width: 560px;
@@ -738,15 +754,32 @@
     weekLabelEl.textContent = "Vecka " + info.week + ", " + info.year;
   }
 
+  function isSameDate(a, b) {
+    return a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+  }
+
+  function dayHasData(dayLabel) {
+    const wk = data.weeks[currentWeekKey()];
+    if (!wk || !wk[dayLabel]) return false;
+    return Object.keys(wk[dayLabel]).some(exName => (wk[dayLabel][exName] || []).length > 0);
+  }
+
   function renderDayTabs() {
     dayTabsEl.innerHTML = "";
     const mon = mondayOf(viewDate);
+    const today = new Date();
     DAYS.forEach((label, idx) => {
       const d = new Date(mon);
       d.setDate(mon.getDate() + idx);
       const tab = document.createElement("div");
-      tab.className = "day-tab" + (idx === activeDayIndex ? " active" : "");
-      tab.innerHTML = label + '<span class="dsub">' + fmtShort(d) + "</span>";
+      let cls = "day-tab";
+      if (idx === activeDayIndex) cls += " active";
+      if (isSameDate(d, today)) cls += " is-today";
+      tab.className = cls;
+      const dot = dayHasData(label) ? '<span class="day-dot"></span>' : "";
+      tab.innerHTML = label + dot + '<span class="dsub">' + fmtShort(d) + "</span>";
       tab.addEventListener("click", () => {
         activeDayIndex = idx;
         render();
