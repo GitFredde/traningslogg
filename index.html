@@ -103,6 +103,11 @@
     white-space: nowrap;
     position: relative;
   }
+  .day-tab.has-data {
+    background: rgba(94, 194, 106, 0.14);
+    border-color: #5ec26a;
+    color: #eaeaea;
+  }
   .day-tab.active {
     background: var(--accent);
     color: #1a1a1a;
@@ -113,18 +118,6 @@
     box-shadow: 0 0 0 2px rgba(234,234,234,0.85) inset;
   }
   .day-tab .dsub { display: block; font-size: 0.65rem; opacity: 0.8; }
-  .day-dot {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #5ec26a;
-    margin-left: 4px;
-    vertical-align: middle;
-  }
-  .day-tab.active .day-dot {
-    background: #1a1a1a;
-  }
   main {
     padding: 16px;
     max-width: 560px;
@@ -775,11 +768,11 @@
       d.setDate(mon.getDate() + idx);
       const tab = document.createElement("div");
       let cls = "day-tab";
+      if (dayHasData(label)) cls += " has-data";
       if (idx === activeDayIndex) cls += " active";
       if (isSameDate(d, today)) cls += " is-today";
       tab.className = cls;
-      const dot = dayHasData(label) ? '<span class="day-dot"></span>' : "";
-      tab.innerHTML = label + dot + '<span class="dsub">' + fmtShort(d) + "</span>";
+      tab.innerHTML = label + '<span class="dsub">' + fmtShort(d) + "</span>";
       tab.addEventListener("click", () => {
         activeDayIndex = idx;
         render();
