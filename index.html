@@ -154,16 +154,20 @@
   .exercise:last-child { border-bottom: none; }
   .exercise-top {
     display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 8px;
+  }
+  .exercise-top-row1 {
+    display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
     gap: 8px;
   }
   .exercise-name { font-size: 0.95rem; flex: 1; }
-  .exercise-week-total {
+  .exercise-subtitle {
     font-size: 0.72rem;
     color: var(--text-dim);
-    white-space: nowrap;
   }
   .remove-ex-btn {
     background: none;
@@ -707,11 +711,25 @@
   }
 
   // ---------- App state ----------
-  let viewDate = new Date(); // any date within the viewed week
-  let activeDayIndex = (function() {
-    const n = (new Date().getDay() + 6) % 7;
-    return n;
-  })();
+  // viewDate: which week is being *browsed* (day-tabs, week header, "veckans
+  // summering"). selectedDate: the exact date whose log is actually shown in
+  // the main categories view. These are intentionally decoupled — browsing
+  // to another week never changes what you're logging; only tapping a
+  // specific day tab does.
+  let viewDate = new Date();
+  let selectedDate = new Date();
+
+  function dayIndexMonBased(date) {
+    return (date.getDay() + 6) % 7;
+  }
+
+  function selectedDayLabel() {
+    return DAYS[dayIndexMonBased(selectedDate)];
+  }
+
+  function selectedWeekKey() {
+    return weekKey(selectedDate);
+  }
 
   function currentWeekKey() {
     return weekKey(viewDate);
@@ -722,8 +740,9 @@
     return data.weeks[key];
   }
 
-  function getDayData(dayLabel) {
-    const wk = ensureWeek(currentWeekKey());
+  function getDayData() {
+    const wk = ensureWeek(selectedWeekKey());
+    const dayLabel = selectedDayLabel();
     if (!wk[dayLabel]) wk[dayLabel] = {};
     return wk[dayLabel];
   }
@@ -769,12 +788,12 @@
       const tab = document.createElement("div");
       let cls = "day-tab";
       if (dayHasData(label)) cls += " has-data";
-      if (idx === activeDayIndex) cls += " active";
+      if (isSameDate(d, selectedDate)) cls += " active";
       if (isSameDate(d, today)) cls += " is-today";
       tab.className = cls;
       tab.innerHTML = label + '<span class="dsub">' + fmtShort(d) + "</span>";
       tab.addEventListener("click", () => {
-        activeDayIndex = idx;
+        selectedDate = d;
         render();
       });
       dayTabsEl.appendChild(tab);
@@ -793,19 +812,19 @@
 
   function renderCategories() {
     categoriesEl.innerHTML = "";
-    const dayLabel = DAYS[activeDayIndex];
-    const dayData = getDayData(dayLabel);
+    const dayData = getDayData();
 
     Object.keys(data.exercises).forEach(catName => {
       const exList = data.exercises[catName];
       const activeList = exList.filter(ex => !ex.archived);
       const archivedList = exList.filter(ex => ex.archived);
 
-      // category totals for the week — includes archived exercises too,
-      // so history stays correct even after an exercise is archived.
+      // category totals for the week the selected date belongs to — includes
+      // archived exercises too, so history stays correct even after an
+      // exercise is archived.
       let catSum = 0, catSets = 0;
       exList.forEach(ex => {
-        const t = weekTotalsForExercise(ex.name);
+        const t = weekTotalsForExercise(ex.name, selectedWeekKey());
         catSum += t.sum; catSets += t.sets;
       });
 
@@ -823,15 +842,18 @@
         const exEl = document.createElement("div");
         exEl.className = "exercise";
 
-        const t = weekTotalsForExercise(exName);
+        const t = weekTotalsForExercise(exName, selectedWeekKey());
+        const pr = findPR(exName);
+        const prText = pr ? ("PB: " + pr.value) : "PB: –";
+
         const top = document.createElement("div");
         top.className = "exercise-top";
+
+        const row1 = document.createElement("div");
+        row1.className = "exercise-top-row1";
         const nameSpan = document.createElement("span");
         nameSpan.className = "exercise-name";
         nameSpan.textContent = exName;
-        const totalSpan = document.createElement("span");
-        totalSpan.className = "exercise-week-total";
-        totalSpan.textContent = t.sum + " reps · " + t.sets + " set (v.)";
         const removeBtn = document.createElement("button");
         removeBtn.className = "remove-ex-btn";
         removeBtn.textContent = "✕";
@@ -849,9 +871,15 @@
             render();
           }
         });
-        top.appendChild(nameSpan);
-        top.appendChild(totalSpan);
-        top.appendChild(removeBtn);
+        row1.appendChild(nameSpan);
+        row1.appendChild(removeBtn);
+
+        const subtitle = document.createElement("div");
+        subtitle.className = "exercise-subtitle";
+        subtitle.textContent = prText + "   ·   " + t.sum + " reps · " + t.sets + " set (v.)";
+
+        top.appendChild(row1);
+        top.appendChild(subtitle);
         exEl.appendChild(top);
 
         const chipsWrap = document.createElement("div");
@@ -1007,19 +1035,35 @@
   }
 
   // ---------- Controls ----------
-  document.getElementById("prevWeek").addEventListener("click", () => {
-    viewDate.setDate(viewDate.getDate() - 7);
+  function shiftWeek(n) {
+    viewDate.setDate(viewDate.getDate() + n * 7);
     viewDate = new Date(viewDate);
     render();
-  });
-  document.getElementById("nextWeek").addEventListener("click", () => {
-    viewDate.setDate(viewDate.getDate() + 7);
-    viewDate = new Date(viewDate);
-    render();
-  });
+  }
+
+  document.getElementById("prevWeek").addEventListener("click", () => shiftWeek(-1));
+  document.getElementById("nextWeek").addEventListener("click", () => shiftWeek(1));
+
+  // Swipe left/right over the day-tabs row moves a whole week at a time —
+  // same effect as the ‹ › buttons. It never touches selectedDate.
+  let touchStartX = null, touchStartY = null;
+  dayTabsEl.addEventListener("touchstart", (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  dayTabsEl.addEventListener("touchend", (e) => {
+    if (touchStartX === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    touchStartX = null; touchStartY = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      shiftWeek(dx > 0 ? -1 : 1);
+    }
+  }, { passive: true });
+
   document.getElementById("jumpToday").addEventListener("click", () => {
     viewDate = new Date();
-    activeDayIndex = (new Date().getDay() + 6) % 7;
+    selectedDate = new Date();
     render();
   });
   document.getElementById("toggleSummary").addEventListener("click", (e) => {
