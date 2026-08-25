@@ -161,14 +161,33 @@
   .exercise-top-row1 {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
   }
-  .exercise-name { font-size: 0.95rem; flex: 1; }
+  .exercise-name-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+  }
+  .exercise-name { font-size: 0.95rem; }
+  .set-chips-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
   .exercise-subtitle {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
     font-size: 0.72rem;
     color: var(--text-dim);
   }
+  .ex-pb { text-align: left; }
+  .ex-week-total { text-align: right; white-space: nowrap; }
   .remove-ex-btn {
     background: none;
     border: none;
@@ -221,13 +240,6 @@
   .archived-row button.purge-btn {
     color: var(--danger);
     border-color: var(--danger);
-  }
-  .set-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 6px;
-    min-height: 22px;
   }
   .chip {
     background: var(--card-2);
@@ -851,9 +863,35 @@
 
         const row1 = document.createElement("div");
         row1.className = "exercise-top-row1";
+
+        const nameChips = document.createElement("div");
+        nameChips.className = "exercise-name-chips";
+
         const nameSpan = document.createElement("span");
         nameSpan.className = "exercise-name";
         nameSpan.textContent = exName;
+        nameChips.appendChild(nameSpan);
+
+        const chipsWrap = document.createElement("div");
+        chipsWrap.className = "set-chips-inline";
+        const sets = dayData[exName] || [];
+        sets.forEach((val, i) => {
+          const chip = document.createElement("div");
+          chip.className = "chip";
+          chip.innerHTML = "<span>" + val + "</span>";
+          const rm = document.createElement("button");
+          rm.textContent = "✕";
+          rm.addEventListener("click", () => {
+            sets.splice(i, 1);
+            dayData[exName] = sets;
+            saveData(data);
+            render();
+          });
+          chip.appendChild(rm);
+          chipsWrap.appendChild(chip);
+        });
+        nameChips.appendChild(chipsWrap);
+
         const removeBtn = document.createElement("button");
         removeBtn.className = "remove-ex-btn";
         removeBtn.textContent = "✕";
@@ -871,36 +909,23 @@
             render();
           }
         });
-        row1.appendChild(nameSpan);
+        row1.appendChild(nameChips);
         row1.appendChild(removeBtn);
 
         const subtitle = document.createElement("div");
         subtitle.className = "exercise-subtitle";
-        subtitle.textContent = prText + "   ·   " + t.sum + " reps · " + t.sets + " set (v.)";
+        const pbSpan = document.createElement("span");
+        pbSpan.className = "ex-pb";
+        pbSpan.textContent = prText;
+        const totalsSpan = document.createElement("span");
+        totalsSpan.className = "ex-week-total";
+        totalsSpan.textContent = t.sum + " reps · " + t.sets + " set (per v.)";
+        subtitle.appendChild(pbSpan);
+        subtitle.appendChild(totalsSpan);
 
         top.appendChild(row1);
         top.appendChild(subtitle);
         exEl.appendChild(top);
-
-        const chipsWrap = document.createElement("div");
-        chipsWrap.className = "set-chips";
-        const sets = dayData[exName] || [];
-        sets.forEach((val, i) => {
-          const chip = document.createElement("div");
-          chip.className = "chip";
-          chip.innerHTML = "<span>" + val + "</span>";
-          const rm = document.createElement("button");
-          rm.textContent = "✕";
-          rm.addEventListener("click", () => {
-            sets.splice(i, 1);
-            dayData[exName] = sets;
-            saveData(data);
-            render();
-          });
-          chip.appendChild(rm);
-          chipsWrap.appendChild(chip);
-        });
-        exEl.appendChild(chipsWrap);
 
         const addRow = document.createElement("div");
         addRow.className = "add-set-row";
