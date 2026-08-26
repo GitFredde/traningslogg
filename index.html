@@ -138,11 +138,6 @@
     background: var(--card-2);
     border-bottom: 1px solid var(--border);
   }
-  .cat-name-group {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
   .category-header .cat-name {
     font-weight: 700;
     letter-spacing: 0.02em;
@@ -152,76 +147,47 @@
     color: var(--accent);
     font-weight: 600;
   }
-  .drag-handle {
-    cursor: grab;
-    touch-action: none;
-    color: var(--text-dim);
-    font-size: 0.95rem;
-    line-height: 1;
-    padding: 4px 2px;
-    flex-shrink: 0;
-    user-select: none;
-    letter-spacing: -1px;
-  }
-  .drag-handle:active { cursor: grabbing; }
-  .category.dragging,
-  .exercise.dragging {
-    opacity: 0.55;
-    box-shadow: 0 6px 16px rgba(0,0,0,0.45);
-    position: relative;
-    z-index: 5;
-  }
   .exercise {
     padding: 9px 14px;
     border-bottom: 1px solid var(--border);
   }
   .exercise:last-child { border-bottom: none; }
   .exercise-top {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     margin-bottom: 6px;
   }
   .exercise-top-row1 {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
   }
-  .exercise-name { font-size: 0.95rem; cursor: pointer; }
-  .exercise-name-input {
-    font-size: 0.95rem;
-    font-family: inherit;
-    color: var(--text);
-    background: var(--card-2);
-    border: none;
-    border-bottom: 1px solid var(--accent);
-    border-radius: 2px;
-    padding: 0 2px;
-    outline: none;
-    min-width: 70px;
-    max-width: 220px;
-  }
-  .exercise-top-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .exercise-inline-stats {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    font-size: 0.72rem;
-    color: var(--text-dim);
-    white-space: nowrap;
-  }
-  .ex-pb {}
-  .ex-week-total { white-space: nowrap; }
-  .set-chips-inline {
+  .exercise-name-chips {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     flex: 1;
   }
+  .exercise-name { font-size: 0.95rem; }
+  .set-chips-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .exercise-subtitle {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+  }
+  .ex-pb { text-align: left; }
+  .ex-week-total { text-align: right; white-space: nowrap; }
   .remove-ex-btn {
     background: none;
     border: none;
@@ -279,39 +245,27 @@
     background: var(--card-2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 3px 6px 3px 8px;
+    padding: 3px 8px;
     font-size: 0.85rem;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
   }
   .chip button {
-    -webkit-appearance: none;
-    appearance: none;
     background: none;
     border: none;
     color: var(--danger);
-    font-size: 0.65rem;
+    font-size: 0.85rem;
     cursor: pointer;
     padding: 0;
-    margin: 0;
     line-height: 1;
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
   }
   .add-set-row {
     display: flex;
-    align-items: center;
     gap: 8px;
   }
   .add-set-row input {
-    flex: 0 0 auto;
-    width: 4.5rem;
-    text-align: right;
+    flex: 1;
     background: var(--card-2);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -328,7 +282,6 @@
     padding: 0 16px;
     font-size: 1rem;
     cursor: pointer;
-    flex-shrink: 0;
   }
   .add-exercise {
     padding: 8px 14px;
@@ -715,7 +668,6 @@
         "Ben": [{name: "Knäböj", archived: false}, {name: "Enbensböj", archived: false}, {name: "Utfall", archived: false}],
         "Core": [{name: "Axeltaps", archived: false}, {name: "Planka", archived: false}]
       },
-      categoryOrder: ["Tryck", "Drag", "Ben", "Core"],
       weeks: {}
     };
   }
@@ -733,21 +685,11 @@
     return exercises;
   }
 
-  // Ensures categoryOrder exists and contains exactly the categories present
-  // in data.exercises (defensive against older saved data / manual edits).
-  function normalizeCategoryOrder() {
-    const known = Object.keys(data.exercises);
-    let order = Array.isArray(data.categoryOrder) ? data.categoryOrder.filter(c => known.includes(c)) : [];
-    known.forEach(c => { if (!order.includes(c)) order.push(c); });
-    data.categoryOrder = order;
-  }
-
   let data = loadData();
   // Make sure structure is sane even if old data is malformed
   if (!data.exercises) data.exercises = defaultData().exercises;
   if (!data.weeks) data.weeks = {};
   data.exercises = migrateExercises(data.exercises);
-  normalizeCategoryOrder();
 
   // ---------- Date / ISO week helpers ----------
   const DAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
@@ -884,7 +826,7 @@
     categoriesEl.innerHTML = "";
     const dayData = getDayData();
 
-    data.categoryOrder.forEach(catName => {
+    Object.keys(data.exercises).forEach(catName => {
       const exList = data.exercises[catName];
       const activeList = exList.filter(ex => !ex.archived);
       const archivedList = exList.filter(ex => ex.archived);
@@ -900,15 +842,10 @@
 
       const catEl = document.createElement("div");
       catEl.className = "category";
-      catEl.dataset.cat = catName;
 
       const header = document.createElement("div");
       header.className = "category-header";
-      header.innerHTML =
-        '<div class="cat-name-group">' +
-          '<span class="drag-handle" data-role="cat-handle">⋮⋮</span>' +
-          '<span class="cat-name">' + catName + '</span>' +
-        '</div>' +
+      header.innerHTML = '<span class="cat-name">' + catName + '</span>' +
         '<span class="cat-totals">' + catSum + ' reps · ' + catSets + ' set</span>';
       catEl.appendChild(header);
 
@@ -916,7 +853,6 @@
         const exName = ex.name;
         const exEl = document.createElement("div");
         exEl.className = "exercise";
-        exEl.dataset.ex = exName;
 
         const t = weekTotalsForExercise(exName, selectedWeekKey());
         const pr = findPR(exName);
@@ -928,60 +864,13 @@
         const row1 = document.createElement("div");
         row1.className = "exercise-top-row1";
 
+        const nameChips = document.createElement("div");
+        nameChips.className = "exercise-name-chips";
+
         const nameSpan = document.createElement("span");
         nameSpan.className = "exercise-name";
         nameSpan.textContent = exName;
-        nameSpan.title = "Tryck för att byta namn";
-        nameSpan.addEventListener("click", () => {
-          startRenameExercise(catName, ex, nameSpan);
-        });
-
-        const rightGroup = document.createElement("div");
-        rightGroup.className = "exercise-top-right";
-
-        const statsGroup = document.createElement("div");
-        statsGroup.className = "exercise-inline-stats";
-        const pbSpan = document.createElement("span");
-        pbSpan.className = "ex-pb";
-        pbSpan.textContent = prText;
-        const totalsSpan = document.createElement("span");
-        totalsSpan.className = "ex-week-total";
-        totalsSpan.textContent = t.sum + " reps · " + t.sets + " set (per v.)";
-        statsGroup.appendChild(pbSpan);
-        statsGroup.appendChild(totalsSpan);
-
-        const removeBtn = document.createElement("button");
-        removeBtn.className = "remove-ex-btn";
-        removeBtn.textContent = "✕";
-        removeBtn.title = "Ta bort " + exName;
-        removeBtn.addEventListener("click", () => {
-          const ok = confirm(
-            'Ta bort "' + exName + '"?\n\n' +
-            "Den försvinner från listan, men all historik du redan loggat sparas " +
-            "och räknas fortfarande med i gamla veckors summering. Du kan ta fram " +
-            'den igen senare under "Arkiverade övningar".'
-          );
-          if (ok) {
-            ex.archived = true;
-            saveData(data);
-            render();
-          }
-        });
-
-        rightGroup.appendChild(statsGroup);
-        rightGroup.appendChild(removeBtn);
-        row1.appendChild(nameSpan);
-        row1.appendChild(rightGroup);
-        top.appendChild(row1);
-        exEl.appendChild(top);
-
-        const addRow = document.createElement("div");
-        addRow.className = "add-set-row";
-
-        const handle = document.createElement("span");
-        handle.className = "drag-handle";
-        handle.dataset.role = "ex-handle";
-        handle.textContent = "⋮⋮";
+        nameChips.appendChild(nameSpan);
 
         const chipsWrap = document.createElement("div");
         chipsWrap.className = "set-chips-inline";
@@ -1001,7 +890,45 @@
           chip.appendChild(rm);
           chipsWrap.appendChild(chip);
         });
+        nameChips.appendChild(chipsWrap);
 
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "remove-ex-btn";
+        removeBtn.textContent = "✕";
+        removeBtn.title = "Ta bort " + exName;
+        removeBtn.addEventListener("click", () => {
+          const ok = confirm(
+            'Ta bort "' + exName + '"?\n\n' +
+            "Den försvinner från listan, men all historik du redan loggat sparas " +
+            "och räknas fortfarande med i gamla veckors summering. Du kan ta fram " +
+            'den igen senare under "Arkiverade övningar".'
+          );
+          if (ok) {
+            ex.archived = true;
+            saveData(data);
+            render();
+          }
+        });
+        row1.appendChild(nameChips);
+        row1.appendChild(removeBtn);
+
+        const subtitle = document.createElement("div");
+        subtitle.className = "exercise-subtitle";
+        const pbSpan = document.createElement("span");
+        pbSpan.className = "ex-pb";
+        pbSpan.textContent = prText;
+        const totalsSpan = document.createElement("span");
+        totalsSpan.className = "ex-week-total";
+        totalsSpan.textContent = t.sum + " reps · " + t.sets + " set (per v.)";
+        subtitle.appendChild(pbSpan);
+        subtitle.appendChild(totalsSpan);
+
+        top.appendChild(row1);
+        top.appendChild(subtitle);
+        exEl.appendChild(top);
+
+        const addRow = document.createElement("div");
+        addRow.className = "add-set-row";
         const input = document.createElement("input");
         input.type = "number";
         input.inputMode = "numeric";
@@ -1021,8 +948,6 @@
         }
         addBtn.addEventListener("click", commit);
         input.addEventListener("keydown", (e) => { if (e.key === "Enter") commit(); });
-        addRow.appendChild(handle);
-        addRow.appendChild(chipsWrap);
         addRow.appendChild(input);
         addRow.appendChild(addBtn);
         exEl.appendChild(addRow);
@@ -1110,146 +1035,13 @@
 
       categoriesEl.appendChild(catEl);
     });
-
-    initDragReorder(categoriesEl, '[data-role="cat-handle"]', ".category", (newCatOrder) => {
-      data.categoryOrder = newCatOrder;
-      CATS.length = 0;
-      CATS.push(...newCatOrder);
-      saveData(data);
-      render();
-    });
-
-    categoriesEl.querySelectorAll(".category").forEach(catEl => {
-      initDragReorder(catEl, '[data-role="ex-handle"]', ".exercise", (newExOrder) => {
-        const catName = catEl.dataset.cat;
-        const exList = data.exercises[catName];
-        // Reorder the underlying array to match the new on-screen order of
-        // active exercises, keeping archived ones' relative position intact.
-        const activeByName = {};
-        exList.filter(e => !e.archived).forEach(e => { activeByName[e.name] = e; });
-        const reorderedActive = newExOrder.map(name => activeByName[name]).filter(Boolean);
-        let ai = 0;
-        const merged = exList.map(e => (e.archived ? e : reorderedActive[ai++]));
-        data.exercises[catName] = merged;
-        saveData(data);
-        render();
-      });
-    });
-  }
-
-  // Turns an exercise name into an inline-editable text field. Renaming
-  // migrates every logged set for that exercise (across all weeks) to the
-  // new name, so history and statistics stay intact.
-  function startRenameExercise(catName, exObj, spanEl) {
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "exercise-name-input";
-    input.value = exObj.name;
-
-    let committed = false;
-
-    function finish(shouldCommit) {
-      if (committed) return;
-      committed = true;
-      if (shouldCommit) {
-        const newName = input.value.trim();
-        if (newName && newName !== exObj.name) {
-          const collision = data.exercises[catName].some(e => e !== exObj && e.name === newName);
-          if (collision) {
-            alert('En övning med namnet "' + newName + '" finns redan i ' + catName + '.');
-            render();
-            return;
-          }
-          const oldName = exObj.name;
-          exObj.name = newName;
-          Object.keys(data.weeks).forEach(wk => {
-            const week = data.weeks[wk];
-            Object.keys(week).forEach(day => {
-              if (week[day] && Object.prototype.hasOwnProperty.call(week[day], oldName)) {
-                week[day][newName] = week[day][oldName];
-                delete week[day][oldName];
-              }
-            });
-          });
-          saveData(data);
-        }
-      }
-      render();
-    }
-
-    input.addEventListener("blur", () => finish(true));
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") input.blur();
-      if (e.key === "Escape") finish(false);
-    });
-
-    spanEl.replaceWith(input);
-    input.focus();
-    input.select();
-  }
-
-  // Generic pointer-based drag-to-reorder for a flat list of sibling
-  // elements inside `container`. Dragging only starts from an element
-  // matching `handleSelector` (keeps it unambiguous vs. tapping elsewhere,
-  // e.g. an exercise name to rename it). `itemSelector` identifies the
-  // draggable rows; each must have a stable `data-cat`/`data-ex` attribute
-  // (whichever applies) so `onReorder` can report the new order by key.
-  function initDragReorder(container, handleSelector, itemSelector, onReorder) {
-    container.addEventListener("pointerdown", (e) => {
-      const handle = e.target.closest(handleSelector);
-      if (!handle || !container.contains(handle)) return;
-      const dragEl = handle.closest(itemSelector);
-      if (!dragEl || dragEl.parentElement !== container) return;
-
-      e.preventDefault();
-      dragEl.setPointerCapture(e.pointerId);
-      dragEl.classList.add("dragging");
-
-      function afterElement(y) {
-        const els = Array.from(container.querySelectorAll(":scope > " + itemSelector)).filter(el => el !== dragEl);
-        let closest = { offset: -Infinity, element: null };
-        els.forEach(el => {
-          const box = el.getBoundingClientRect();
-          const offset = y - (box.top + box.height / 2);
-          if (offset < 0 && offset > closest.offset) closest = { offset, element: el };
-        });
-        return closest.element;
-      }
-
-      function onMove(ev) {
-        const target = afterElement(ev.clientY);
-        const siblings = Array.from(container.querySelectorAll(":scope > " + itemSelector)).filter(el => el !== dragEl);
-        if (target == null) {
-          const last = siblings[siblings.length - 1];
-          if (last) container.insertBefore(dragEl, last.nextSibling);
-        } else if (target !== dragEl.nextSibling) {
-          container.insertBefore(dragEl, target);
-        }
-      }
-
-      function onUp(ev) {
-        dragEl.releasePointerCapture(ev.pointerId);
-        dragEl.classList.remove("dragging");
-        container.removeEventListener("pointermove", onMove);
-        container.removeEventListener("pointerup", onUp);
-        container.removeEventListener("pointercancel", onUp);
-        const key = itemSelector === ".category" ? "cat" : "ex";
-        const newOrder = Array.from(container.querySelectorAll(":scope > " + itemSelector))
-          .map(el => el.dataset[key]);
-        onReorder(newOrder);
-      }
-
-      container.addEventListener("pointermove", onMove);
-      container.addEventListener("pointerup", onUp);
-      container.addEventListener("pointercancel", onUp);
-    });
   }
 
   function renderSummary() {
     const info = isoWeekInfo(viewDate);
     summaryWeekLabelEl.textContent = "Vecka " + info.week + ", " + info.year;
     summaryBody.innerHTML = "";
-    data.categoryOrder.forEach(catName => {
+    Object.keys(data.exercises).forEach(catName => {
       const exList = data.exercises[catName];
       let catSum = 0, catSets = 0;
       exList.forEach(ex => {
@@ -1308,10 +1100,7 @@
   });
 
   // ---------- Statistics ----------
-  // Same array object as data.categoryOrder — reordering categories (drag
-  // handle in the log view) is reflected here automatically, no separate
-  // sync step needed.
-  const CATS = data.categoryOrder;
+  const CATS = ["Tryck", "Drag", "Ben", "Core"];
   // Okabe-Ito palette — designed to stay distinguishable across all common
   // forms of color blindness. Line dash + point shape give a second,
   // color-independent way to tell categories apart.
@@ -1586,9 +1375,6 @@
         if (!data.exercises) data.exercises = defaultData().exercises;
         if (!data.weeks) data.weeks = {};
         data.exercises = migrateExercises(data.exercises);
-        normalizeCategoryOrder();
-        CATS.length = 0;
-        CATS.push(...data.categoryOrder);
         saveLocal(data);
         render();
         if (statsViewVisible()) renderStats();
