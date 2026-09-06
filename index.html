@@ -171,7 +171,7 @@
     gap: 6px;
     flex: 1;
   }
-  .exercise-name { font-size: 0.95rem; }
+  .exercise-name { font-size: 0.95rem; outline: none; }
   .set-chips-inline {
     display: flex;
     flex-wrap: wrap;
@@ -759,6 +759,75 @@
     return wk[dayLabel];
   }
 
+  // Renames an exercise and carries its logged history (in data.weeks)
+  // over from the old name-key to the new one, so nothing is lost.
+  function renameExercise(ex, oldName, newName) {
+    Object.keys(data.weeks).forEach(wk => {
+      const week = data.weeks[wk];
+      Object.keys(week).forEach(day => {
+        const dayObj = week[day];
+        if (Object.prototype.hasOwnProperty.call(dayObj, oldName)) {
+          const oldSets = dayObj[oldName];
+          delete dayObj[oldName];
+          if (Object.prototype.hasOwnProperty.call(dayObj, newName)) {
+            dayObj[newName] = dayObj[newName].concat(oldSets);
+          } else {
+            dayObj[newName] = oldSets;
+          }
+        }
+      });
+    });
+    ex.name = newName;
+    saveData(data);
+    render();
+  }
+
+  // Makes an exercise-name span click-to-edit: looks completely static
+  // until tapped, then becomes editable in place; Enter or blur commits,
+  // Escape cancels.
+  //
+  // Note: contentEditable is turned on up front (not inside the click/tap
+  // handler). Toggling it on *in response to* the tap is unreliable on touch
+  // devices (iOS Safari in particular needs the element to already be
+  // editable at touch-start time, or the first tap just gets swallowed and
+  // the keyboard never appears). Since ordinary text is already selectable
+  // and shows the same text cursor on hover, making it contentEditable
+  // up front doesn't change how it looks before you interact with it.
+  function makeNameEditable(span, ex) {
+    let oldName = ex.name;
+    span.contentEditable = "true";
+    span.spellcheck = false;
+
+    span.addEventListener("focus", () => {
+      oldName = ex.name;
+      const range = document.createRange();
+      range.selectNodeContents(span);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+
+    span.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        span.blur();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        span.textContent = oldName;
+        span.blur();
+      }
+    });
+
+    span.addEventListener("blur", () => {
+      const newName = span.textContent.replace(/\s+/g, " ").trim();
+      if (newName && newName !== oldName) {
+        renameExercise(ex, oldName, newName);
+      } else {
+        render();
+      }
+    });
+  }
+
   // ---------- Rendering ----------
   const dayTabsEl = document.getElementById("dayTabs");
   const weekLabelEl = document.getElementById("weekLabel");
@@ -870,6 +939,7 @@
         const nameSpan = document.createElement("span");
         nameSpan.className = "exercise-name";
         nameSpan.textContent = exName;
+        makeNameEditable(nameSpan, ex);
         nameChips.appendChild(nameSpan);
 
         const chipsWrap = document.createElement("div");
